@@ -1,0 +1,50 @@
+dependency:
+  name: galaxy
+
+driver:
+  name: vagrant
+
+verifier:
+  name: ansible
+
+platforms:
+  - name: pihole-master
+    image: debian:bookworm
+    memory: 1024
+    cpus: 2
+    pre_build_image: true
+    privileged: true
+    groups:
+      - pihole_cluster
+      - master
+    interfaces:
+      - network_name: private_network
+        ip: 10.0.20.50
+
+  - name: pihole-backup
+    image: debian:bookworm
+    memory: 1024
+    cpus: 2
+    pre_build_image: true
+    privileged: true
+    groups:
+      - pihole_cluster
+      - backup
+    interfaces:
+      - network_name: private_network
+        ip: 10.0.20.51
+
+provisioner:
+  name: ansible
+  env:
+    ANSIBLE_VERBOSITY: 1
+  playbooks:
+    converge: ../resources/converge.yml
+  inventory:
+    links:
+      group_vars: ../../inventory/group_vars
+    host_vars:
+      pihole-master:
+        priority: 150
+      pihole-backup:
+        priority: 140

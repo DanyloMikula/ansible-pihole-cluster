@@ -1,0 +1,45 @@
+name: Test
+
+on:
+  workflow_call:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  molecule:
+    name: Molecule
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario:
+          - debian-12
+    env:
+      PYTHON_VERSION: "3.12"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Install dependencies
+        run: |
+          echo "::group::Upgrade pip"
+          python3 -m pip install --upgrade pip
+          echo "::endgroup::"
+
+          echo "::group::Install Python requirements from requirements.txt"
+          python3 -m pip install -r requirements.txt
+          echo "::endgroup::"
+
+      - name: Test with molecule
+        uses: gofrolist/molecule-action@v2
+        with:
+          molecule_options: --debug --base-config molecule/_shared/base.yml
+          molecule_command: test
+          molecule_args: --scenario-name ${{ matrix.scenario }}
+        env:
+          ANSIBLE_SSH_RETRIES: 4
+          ANSIBLE_TIMEOUT: 120
+          PY_COLORS: 1
+          ANSIBLE_FORCE_COLOR: 1
+          ANSIBLE_K3S_LOG_DIR: ${{ runner.temp }}/logs/${GITHUB_SHA}/${{ matrix.scenario }}
