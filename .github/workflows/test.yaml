@@ -2,6 +2,12 @@ name: Test
 
 on:
   workflow_dispatch:
+    inputs:
+      python-version:
+        description: "Set Python version"
+        required: true
+        default: "3.12"
+        type: string
 
 jobs:
   molecule:
@@ -12,23 +18,54 @@ jobs:
       matrix:
         scenario:
           - debian-12
-    env:
-      PYTHON_VERSION: "3.12"
+
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
+
+      - name: Delete old Vagrant box versions
+        if: always()
+        run: vagrant box prune --force
+
+      - name: Remove all local Vagrant boxes
+        if: always()
+        run: if vagrant box list 2>/dev/null; then vagrant box list | cut -f 1 -d ' ' | xargs -L 1 vagrant box remove -f 2>/dev/null && echo "All Vagrant boxes removed." || echo "No Vagrant boxes found."; else echo "No Vagrant boxes found."; fi
+
+      - name: Remove all Virtualbox VMs
+        if: always()
+        run: VBoxManage list vms | awk -F'"' '{print $2}' | xargs -I {} VBoxManage unregistervm --delete "{}"
+
+      - name: Remove all Virtualbox HDs
+        if: always()
+        run: VBoxManage list hdds | awk -F':' '/^UUID:/ {print $2}' | xargs -I {} VBoxManage closemedium disk "{}" --delete
+
+      - name: Remove all Virtualbox Networks
+        if: always()
+        run: VBoxManage list hostonlyifs | grep '^Name:' | awk '{print $2}' | grep '^vboxnet' | xargs -I {} VBoxManage hostonlyif remove {}
+
+      - name: Remove Virtualbox network config
+        if: always()
+        run: sudo rm /etc/vbox/networks.conf || true
+
+      - name: Configure VirtualBox networking
+        run: |-
+          sudo mkdir -p /etc/vbox
+          cat <<EOF | sudo tee -a /etc/vbox/networks.conf > /dev/null
+          * 0.0.0.0/0 ::/0
+          EOF
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          cache: "pip"
+          check-latest: true
 
       - name: Install dependencies
         run: |
-          echo "::group::Upgrade pip"
           python3 -m pip install --upgrade pip
-          echo "::endgroup::"
-
-          echo "::group::Install Python requirements from requirements.txt"
           python3 -m pip install -r requirements.txt
-          echo "::endgroup::"
 
-      - name: Test with molecule
+      - name: Run ${{ matrix.scenario }} molecule tests
         uses: gofrolist/molecule-action@v2
         with:
           molecule_options: --debug
@@ -40,3 +77,37 @@ jobs:
           PY_COLORS: 1
           ANSIBLE_FORCE_COLOR: 1
           ANSIBLE_K3S_LOG_DIR: ${{ runner.temp }}/logs/${GITHUB_SHA}/${{ matrix.scenario }}
+
+      - name: Delete old Vagrant box versions
+        if: always()
+        run: vagrant box prune --force
+
+      - name: Remove all local Vagrant boxes
+        if: always()
+        run: if vagrant box list 2>/dev/null; then vagrant box list | cut -f 1 -d ' ' | xargs -L 1 vagrant box remove -f 2>/dev/null && echo "All Vagrant boxes removed." || echo "No Vagrant boxes found."; else echo "No Vagrant boxes found."; fi
+
+      - name: Remove all Virtualbox VMs
+        if: always()
+        run: VBoxManage list vms | awk -F'"' '{print $2}' | xargs -I {} VBoxManage unregistervm --delete "{}"
+
+      - name: Remove all Virtualbox HDs
+        if: always()
+        run: VBoxManage list hdds | awk -F':' '/^UUID:/ {print $2}' | xargs -I {} VBoxManage closemedium disk "{}" --delete
+
+      - name: Remove all Virtualbox Networks
+        if: always()
+        run: VBoxManage list hostonlyifs | grep '^Name:' | awk '{print $2}' | grep '^vboxnet' | xargs -I {} VBoxManage hostonlyif remove {}
+
+      - name: Remove Virtualbox network config
+        if: always()
+        run: sudo rm /etc/vbox/networks.conf || true
+
+      - name: Upload ${{ matrix.scenario }} log files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.scenario }}-molecule-logs
+          path: |
+            ${{ runner.temp }}/logs/${GITHUB_SHA}/${{ matrix.scenario }}
+          retention-days: 15
+          overwrite: true
