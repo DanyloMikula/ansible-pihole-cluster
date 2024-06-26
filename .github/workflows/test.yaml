@@ -1,10 +1,7 @@
 name: Test
 
 on:
-  workflow_call:
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
   molecule:
@@ -34,7 +31,7 @@ jobs:
       - name: Test with molecule
         uses: gofrolist/molecule-action@v2
         with:
-          molecule_options: --debug --base-config molecule/_shared/base.yml
+          molecule_options: --debug
           molecule_command: test
           molecule_args: --scenario-name ${{ matrix.scenario }}
         env:
