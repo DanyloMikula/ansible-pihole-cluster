@@ -9,11 +9,9 @@ verifier:
 
 platforms:
   - name: pihole-master
-    image: debian:bookworm
+    box: generic/debian12
     memory: 1024
     cpus: 2
-    pre_build_image: true
-    privileged: true
     groups:
       - pihole_cluster
       - master
@@ -22,11 +20,9 @@ platforms:
         ip: 10.0.20.50
 
   - name: pihole-backup
-    image: debian:bookworm
+    box: generic/debian12
     memory: 1024
     cpus: 2
-    pre_build_image: true
-    privileged: true
     groups:
       - pihole_cluster
       - backup
@@ -39,12 +35,9 @@ provisioner:
   env:
     ANSIBLE_VERBOSITY: 1
   playbooks:
-    converge: ../resources/converge.yml
+    converge: ../../bootstrap-pihole.yaml
   inventory:
     links:
       group_vars: ../../inventory/group_vars
-    host_vars:
-      pihole-master:
-        priority: 150
-      pihole-backup:
-        priority: 140
+      host_vars: ../../inventory
+      hosts: ../../inventory
